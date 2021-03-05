@@ -1,0 +1,51 @@
+Bootstrap: docker
+From: nvidia/cuda:11.2.1-devel-centos8
+
+%post
+    export CUDA_DIR=/usr/local/cuda-11.2
+    export PATH=/usr/local/cuda/bin:$PATH
+    export LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:$LD_LIBRARY_PATH
+
+    dnf update -y
+    dnf install -y wget cmake make gcc gcc-c++ perl git gcc-gfortran
+
+    wget https://download.open-mpi.org/release/open-mpi/v4.0/openmpi-4.0.1.tar.gz
+    tar -xvf openmpi-4.0.1.tar.gz
+    cd openmpi-4.0.1
+    ./configure CXX=g++ CC=gcc FC=gfortran --prefix=/usr/local --enable-mpi-fortran --enable-mpi-cxx --enable-mpi-fortran --enable-mpi-cxx
+    make
+    make install
+
+    dnf install -y vim-common patch
+    wget https://github.com/plumed/plumed2/releases/download/v2.7.0/plumed-2.7.0.tgz
+    tar -xvf plumed-2.7.0.tgz
+    cd plumed-2.7.0
+    ./configure CXX="$MPICXX" --prefix=/usr/local
+    make 
+    make install 
+    export PLUMED_KERNEL=/usr/local/lib/libplumedKernel.so
+    export PATH="/usr/local/bin:$PATH"
+    export LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH" 
+    export LIBRARY_PATH="/usr/local/lib:$LIBRARY_PATH"
+    export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
+    export PLUMED_VIMPATH="/usr/local/lib/plumed/vim"
+
+    cd ..
+    plumed 
+    plumed --has-mpi
+
+    wget http://ftp.gromacs.org/pub/gromacs/gromacs-2020.4.tar.gz
+    tar xvfz gromacs-2020.4.tar.gz
+    cd gromacs-2020.4  
+    plumed patch -p -e gromacs-2020.4
+
+    mkdir build_plumed
+    cd build_plumed
+    cmake .. -DGMX_BUILD_OWN_FFTW=ON \
+             -DGMX_GPU=ON \
+             -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-11.2 \
+             -DGMX_MPI=ON \
+             -DREGRESSIONTEST_DOWNLOAD=ON \
+             -DCMAKE_INSTALL_PREFIX=/usr/local
+    make -j 10
+    make install  
